@@ -110,37 +110,53 @@ class TokenParser
      *
      * @return array A list with all found class names for a use statement.
      */
-    private function parseUseStatement()
-    {
-        $class = '';
-        $alias = '';
-        $statements = array();
-        $explicitAlias = false;
-        while (($token = $this->next())) {
-            $isNameToken = $token[0] === T_STRING || $token[0] === T_NS_SEPARATOR;
-            if (!$explicitAlias && $isNameToken) {
-                $class .= $token[1];
-                $alias = $token[1];
-            } elseif ($explicitAlias && $isNameToken) {
-                $alias .= $token[1];
-            } elseif ($token[0] === T_AS) {
-                $explicitAlias = true;
-                $alias = '';
-            } elseif ($token === ',') {
-                $statements[strtolower($alias)] = $class;
-                $class = '';
-                $alias = '';
-                $explicitAlias = false;
-            } elseif ($token === ';') {
-                $statements[strtolower($alias)] = $class;
-                break;
-            } else {
-                break;
-            }
-        }
+	private function parseUseStatement()
+	{
+		$groupRoot = '';
+		$class = '';
+		$alias = '';
+		$statements = [];
+		$explicitAlias = false;
+		while (($token = $this->next())) {
+			if (! $explicitAlias && $token[0] === T_STRING) {
+				$class .= $token[1];
+				$alias = $token[1];
+			} elseif ($explicitAlias && $token[0] === T_STRING) {
+				$alias = $token[1];
+			} elseif (
+				PHP_VERSION_ID >= 80000 &&
+				($token[0] === T_NAME_QUALIFIED || $token[0] === T_NAME_FULLY_QUALIFIED)
+			) {
+				$class .= $token[1];
 
-        return $statements;
-    }
+				$classSplit = explode('\\', $token[1]);
+				$alias = $classSplit[count($classSplit) - 1];
+			} elseif ($token[0] === T_NS_SEPARATOR) {
+				$class .= '\\';
+				$alias = '';
+			} elseif ($token[0] === T_AS) {
+				$explicitAlias = true;
+				$alias = '';
+			} elseif ($token === ',') {
+				$statements[strtolower($alias)] = $groupRoot . $class;
+				$class = '';
+				$alias = '';
+				$explicitAlias = false;
+			} elseif ($token === ';') {
+				$statements[strtolower($alias)] = $groupRoot . $class;
+				break;
+			} elseif ($token === '{') {
+				$groupRoot = $class;
+				$class = '';
+			} elseif ($token === '}') {
+				continue;
+			} else {
+				break;
+			}
+		}
+
+		return $statements;
+	}
 
     /**
      * Gets the namespace.
