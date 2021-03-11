@@ -39,13 +39,13 @@ class PhpDocReader
 
     /**
      * Enable or disable throwing errors when PhpDoc Errors occur (when parsing annotations)
-     * 
+     *
      * @var bool
      */
     private $ignorePhpDocErrors;
 
     /**
-     * 
+     *
      * @param bool $ignorePhpDocErrors
      */
     public function __construct($ignorePhpDocErrors = false)
@@ -112,7 +112,7 @@ class PhpDocReader
                     $type
                 ));
             }
-            
+
             $type = $resolvedType;
         }
 
@@ -156,8 +156,15 @@ class PhpDocReader
      */
     public function getParameterClass(ReflectionParameter $parameter)
     {
-        // Use reflection
-        $parameterClass = $parameter->getClass();
+		// Use reflection
+		if (PHP_VERSION_ID > 80000) {
+			$parameterClass = $parameter->getType() && !$parameter->getType()->isBuiltin()
+				? new ReflectionClass($parameter->getType()->getName())
+				: null;
+		} else {
+			$parameterClass = $parameter->getClass();
+		}
+
         if ($parameterClass !== null) {
             return $parameterClass->name;
         }
@@ -187,7 +194,7 @@ class PhpDocReader
         if ($type[0] !== '\\') {
             // Try to resolve the FQN using the class context
             $resolvedType = $this->tryResolveFqn($type, $class, $parameter);
-         
+
             if (!$resolvedType && !$this->ignorePhpDocErrors) {
                 throw new AnnotationException(sprintf(
                     'The @param annotation for parameter "%s" of %s::%s contains a non existent class "%s". '
@@ -198,7 +205,7 @@ class PhpDocReader
                     $type
                 ));
             }
-            
+
             $type = $resolvedType;
         }
 
@@ -224,10 +231,10 @@ class PhpDocReader
      * @param string $type
      * @param ReflectionClass $class
      * @param Reflector $member
-     * 
+     *
      * @return string|null Fully qualified name of the type, or null if it could not be resolved
      */
-    private function tryResolveFqn($type, ReflectionClass $class, Reflector $member) 
+    private function tryResolveFqn($type, ReflectionClass $class, Reflector $member)
     {
         $alias = ($pos = strpos($type, '\\')) === false ? $type : substr($type, 0, $pos);
         $loweredAlias = strtolower($alias);
@@ -263,7 +270,7 @@ class PhpDocReader
     /**
      * Attempts to resolve the FQN of the provided $type based on the $class and $member context, specifically searching
      * through the traits that are used by the provided $class.
-     * 
+     *
      * @param string $type
      * @param ReflectionClass $class
      * @param Reflector $member
@@ -280,7 +287,7 @@ class PhpDocReader
             $traits = array_merge($traits, $class->getTraits());
             $class = $class->getParentClass();
         }
-        
+
         foreach ($traits as $trait) {
             // Eliminate traits that don't have the property/method/parameter
             if ($member instanceof ReflectionProperty && !$trait->hasProperty($member->name)) {
@@ -293,7 +300,7 @@ class PhpDocReader
 
             // Run the resolver again with the ReflectionClass instance for the trait
             $resolvedType = $this->tryResolveFqn($type, $trait, $member);
-            
+
             if ($resolvedType) {
                 return $resolvedType;
             }
